@@ -1,0 +1,41 @@
+{% extends "admin.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <h2 class="mb-4">Liste des commandes</h2>
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Téléphone</th>
+                    <th>Plat</th>
+                    <th>Statut</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for commande in commandes %}
+                <tr>
+                    <td>{{ commande.date_commande.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <td>{{ commande.phone }}</td>
+                    <td>{{ commande.plat }}</td>
+                    <td>
+                        <span class="status-badge status-{{ commande.statut }}">
+                            {{ commande.statut }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if commande.statut == 'active' %}
+                        <button class="btn btn-sm btn-danger" onclick="annulerCommande('{{ commande.id }}')">
+                            <i class="bi bi-x-circle"></i> Annuler
+                        </button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

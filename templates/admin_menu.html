@@ -1,0 +1,115 @@
+{% extends "admin.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Gestion du menu</h3>
+                    <div class="card-tools">
+                        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addMenuModal">
+                            <i class="bi bi-plus-lg"></i> Ajouter un plat
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- Affichage du menu pour chaque jour -->
+                    <div class="row">
+                        {% for jour, plats in menu_par_jour.items() %}
+                        <div class="col-md-6 mb-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="card-title">{{ jour.capitalize() }}</h5>
+                                </div>
+                                <div class="card-body">
+                                    <ul class="list-group">
+                                        {% for plat in plats %}
+                                        <li class="list-group-item">
+                                            {{ plat }}
+                                            <button class="btn btn-danger btn-sm float-end" onclick="supprimerPlat('{{ jour }}', '{{ plat }}')">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Ajouter Plat -->
+<div class="modal fade" id="addMenuModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Ajouter un plat</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addPlatForm">
+                    <div class="mb-3">
+                        <label for="jour" class="form-label">Jour</label>
+                        <select class="form-select" id="jour" name="jour" required>
+                            <option value="monday">Lundi</option>
+                            <option value="tuesday">Mardi</option>
+                            <option value="wednesday">Mercredi</option>
+                            <option value="thursday">Jeudi</option>
+                            <option value="friday">Vendredi</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="plat" class="form-label">Plat</label>
+                        <input type="text" class="form-control" id="plat" name="plat" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                <button type="button" class="btn btn-primary" onclick="ajouterPlat()">Ajouter</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function ajouterPlat() {
+    const jour = document.getElementById('jour').value;
+    const plat = document.getElementById('plat').value;
+    
+    fetch(`/admin/menu/ajouter?jour=${jour}&plat=${encodeURIComponent(plat)}`, {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Erreur lors de l\'ajout du plat');
+        }
+    });
+}
+
+function supprimerPlat(jour, plat) {
+    if (confirm('Êtes-vous sûr de vouloir supprimer ce plat ?')) {
+        fetch(`/admin/menu/supprimer?jour=${jour}&plat=${encodeURIComponent(plat)}`, {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Erreur lors de la suppression du plat');
+            }
+        });
+    }
+}
+</script>
+{% endblock %}

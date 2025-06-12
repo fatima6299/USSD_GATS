@@ -1,62 +1,79 @@
-from flask import Flask, request
+from flask import Flask, request, render_template, jsonify, Response
 from datetime import datetime
-from models import Session, Commande
+from models import Session, Commande, Menu
+import csv
+from io import StringIO
 
 app = Flask(__name__)
 
-MENU_PAR_JOUR = {
-    "monday": ["Thiebou", "Mafé"],
-    "tuesday": ["Vermicelle", "Mbakhal"],
-    "wednesday": ["Domoda", "Soupe kandia"],
-    "thursday": ["Yassa poulet", "Thiebou guinar"],
-    "friday": ["Poisson braisé", "Lakh"]
-}
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/commandes')
+def commandes():
+    session = Session()
+    commandes = session.query(Commande).order_by(Commande.date_commande.desc()).all()
+    session.close()
+    return render_template('commandes.html', commandes=commandes)
+
+# Initialiser les données du menu
+@app.before_first_request
+def init_menu():
+    session = Session()
+    # Vérifier si la table est vide
+    if session.query(Menu).count() == 0:
+        # Ajouter les plats par défaut
+        default_menu = {
+            "monday": ["Thiebou", "Mafé"],
+            "tuesday": ["Vermicelle", "Mbakhal"],
+            "wednesday": ["Domoda", "Soupe kandia"],
+            "thursday": ["Yassa poulet", "Thiebou guinar"],
+            "friday": ["Poisson braisé", "Lakh"]
+        }
+        
+        for jour, plats in default_menu.items():
+            for plat in plats:
+                new_menu = Menu(jour=jour, plat=plat)
+                session.add(new_menu)
+        session.commit()
+    session.close()
 
 @app.route('/ussd', methods=['POST'])
 def ussd():
-    text = request.form.get("text", "")
-    phone = request.form.get("phoneNumber", "")
     session = Session()
+    phone = request.form.get("phoneNumber", "")
+    text = request.form.get("text", "")
     jour = datetime.now().strftime('%A').lower()
 
     if text == "":
-        response = "CON Bienvenue au service de commande de repas\n1. Commander\n2. Voir mes commandes\n3. Annuler ma commande"
+        response = "CON Bienvenue au service de commande de repas\n"
+        response += "1. Commande du jour\n"
+        response += "2. Historique des commandes\n"
+        response += "3. Quitter"
     elif text == "1":
-        plats_du_jour = MENU_PAR_JOUR.get(jour, [])
-        if plats_du_jour:
-            options = "\n".join([f"{i+1}. {p}" for i, p in enumerate(plats_du_jour)])
-            response = f"CON Menu du jour ({jour.capitalize()}) :\n{options}"
+        plats_du_jour = session.query(Menu).filter_by(jour=jour).all()
+        if not plats_du_jour:
+            response = "END Aucun plat disponible aujourd'hui."
         else:
-            response = "END Aucun plat prévu pour aujourd'hui."
+            options = "\n".join([f"{i+1}. {p.plat}" for i, p in enumerate(plats_du_jour)])
+            response = f"CON Menu du jour ({jour.capitalize()}) :\n{options}"
     elif text.startswith("1*"):
-        choix = text.split("*")[1]
-        plats_du_jour = MENU_PAR_JOUR.get(jour, [])
-        try:
-            index = int(choix) - 1
-            plat = plats_du_jour[index]
+        plat_index = int(text.split("*")[1])
+        plats_du_jour = session.query(Menu).filter_by(jour=jour).all()
+        if plat_index > 0 and plat_index <= len(plats_du_jour):
+            plat = plats_du_jour[plat_index - 1].plat
             
-            # Vérifier s'il y a déjà une commande active pour aujourd'hui
-            date_jour = datetime.now().date()
-            commande_jour = session.query(Commande).filter(
-                Commande.phone == phone,
-                Commande.date_commande >= datetime.combine(date_jour, datetime.min.time())
-            ).first()
-            
-            if commande_jour:
-                if commande_jour.statut == 'active':
-                    response = "END Vous avez déjà une commande active pour aujourd'hui. Annulez-la d'abord pour en faire une nouvelle."
-                else:  # Si la commande précédente est déjà annulée
-                    commande_jour.statut = 'active'
-                    commande_jour.plat = plat
-                    commande_jour.date_commande = datetime.now()
-                    session.commit()
-                    response = f"END Commande de '{plat}' mise à jour avec succès."
-            else:
-                session.add(Commande(phone=phone, plat=plat))
-                session.commit()
-                response = f"END Commande de '{plat}' enregistrée avec succès."
-        except (IndexError, ValueError):
-            response = "END Choix invalide."
+            # Créer une nouvelle commande
+            new_commande = Commande(
+                phone=phone,
+                plat=plat
+            )
+            session.add(new_commande)
+            session.commit()
+            response = f"END Commande de '{plat}' enregistrée avec succès."
+        else:
+            response = "END Option invalide."
     elif text == "2":
         # Afficher uniquement les commandes actives
         commandes = session.query(Commande).filter_by(phone=phone, statut='active').order_by(Commande.date_commande.desc()).limit(3).all()
@@ -86,30 +103,122 @@ def ussd():
     session.close()
     return response
 
-@app.route('/commandes', methods=['GET'])
-def afficher_commandes():
+@app.route('/export/commandes.csv')
+def exporter_commandes():
     session = Session()
     commandes = session.query(Commande).order_by(Commande.date_commande.desc()).all()
-    html = "<h2>GatsMapping commandes</h2><ul>"
-    for cmd in commandes:
-        html += f"<li>{cmd.date_commande} — {cmd.phone} → {cmd.plat}</li>"
-    html += "</ul>"
+    
+    # Créer un objet StringIO pour le CSV
+    csv_output = StringIO()
+    writer = csv.writer(csv_output)
+    
+    # Écrire l'en-tête
+    writer.writerow(['Date', 'Téléphone', 'Plat', 'Statut'])
+    
+    # Écrire les données
+    for commande in commandes:
+        writer.writerow([
+            commande.date_commande.strftime('%Y-%m-%d %H:%M:%S'),
+            commande.phone,
+            commande.plat,
+            commande.statut
+        ])
+    
+    # Préparer la réponse
+    response = Response(
+        csv_output.getvalue(),
+        mimetype='text/csv',
+        headers={"Content-Disposition": "attachment;filename=commandes.csv"}
+    )
     session.close()
-    return html
+    return response
 
-if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+from flask import render_template, jsonify, Response
+import csv
+from io import StringIO
+from datetime import datetime
 
-@app.route('/commandes', methods=['GET'])
-def afficher_commandes():
+@app.route('/admin', methods=['GET'])
+def admin_dashboard():
     session = Session()
-    commandes = session.query(Commande).order_by(Commande.date_commande.desc()).all()
-    html = "<h2>GatsMapping commandes</h2><ul>"
-    for cmd in commandes:
-        html += f"<li>{cmd.date_commande} — {cmd.phone} → {cmd.plat}</li>"
-    html += "</ul>"
+    commandes = session.query(Commande).order_by(Commande.date_commande.desc()).limit(10).all()
+    stats = {
+        'total': session.query(Commande).count(),
+        'active': session.query(Commande).filter_by(statut='active').count(),
+        'annulees': session.query(Commande).filter_by(statut='annulee').count()
+    }
     session.close()
-    return html
+    return render_template('dashboard.html', commandes=commandes, stats=stats)
+
+@app.route('/admin/commandes/<int:id>/annuler', methods=['POST'])
+def annuler_commande_admin(id):
+    session = Session()
+    commande = session.query(Commande).get_or_404(id)
+    commande.statut = 'annulee'
+    session.commit()
+    session.close()
+    return jsonify({'success': True})
+
+@app.route('/admin/menu')
+def admin_menu():
+    session = Session()
+    menu = session.query(Menu).all()
+    menu_par_jour = {}
+    for item in menu:
+        if item.jour not in menu_par_jour:
+            menu_par_jour[item.jour] = []
+        menu_par_jour[item.jour].append(item.plat)
+    
+    return render_template('admin_menu.html', menu_par_jour=menu_par_jour)
+
+@app.route('/admin/menu/ajouter', methods=['POST'])
+def ajouter_plat():
+    session = Session()
+    jour = request.args.get('jour')
+    plat = request.args.get('plat')
+    
+    if jour and plat:
+        new_menu = Menu(jour=jour, plat=plat)
+        session.add(new_menu)
+        session.commit()
+        return jsonify({'success': True})
+    return jsonify({'success': False})
+
+@app.route('/admin/menu/supprimer', methods=['POST'])
+def supprimer_plat():
+    session = Session()
+    jour = request.args.get('jour')
+    plat = request.args.get('plat')
+    
+    if jour and plat:
+        menu_item = session.query(Menu).filter_by(jour=jour, plat=plat).first()
+        if menu_item:
+            session.delete(menu_item)
+            session.commit()
+            return jsonify({'success': True})
+    return jsonify({'success': False})
+
+# Initialiser les données du menu
+@app.before_first_request
+def init_menu():
+    session = Session()
+    # Vérifier si la table est vide
+    if session.query(Menu).count() == 0:
+        # Ajouter les plats par défaut
+        default_menu = {
+            "monday": ["Thiebou", "Mafé"],
+            "tuesday": ["Vermicelle", "Mbakhal"],
+            "wednesday": ["Domoda", "Soupe kandia"],
+            "thursday": ["Yassa poulet", "Thiebou guinar"],
+            "friday": ["Poisson braisé", "Lakh"]
+        }
+        
+        for jour, plats in default_menu.items():
+            for plat in plats:
+                new_menu = Menu(jour=jour, plat=plat)
+                session.add(new_menu)
+        session.commit()
+    session.close()
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

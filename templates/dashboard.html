@@ -1,0 +1,73 @@
+{% extends "admin.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <h5 class="card-title">Total des commandes</h5>
+                    <h2>{{ stats.total }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Commandes actives</h5>
+                    <h2>{{ stats.active }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Commandes annulées</h5>
+                    <h2>{{ stats.annulees }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Latest Orders -->
+    <h2 class="mb-4">Commandes récentes</h2>
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Téléphone</th>
+                    <th>Plat</th>
+                    <th>Statut</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for commande in commandes %}
+                <tr class="commande-card">
+                    <td>{{ commande.date_commande.strftime('%Y-%m-%d') }}</td>
+                    <td>{{ commande.phone }}</td>
+                    <td>{{ commande.plat }}</td>
+                    <td>
+                        <span class="status-badge status-{{ commande.statut }}">
+                            {{ commande.statut }}
+                        </span>
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-danger" onclick="annulerCommande('{{ commande.id }}')">
+                            <i class="bi bi-x-circle"></i> Annuler
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="mt-4">
+        <a href="/export/commandes.csv" class="btn btn-primary">
+            <i class="bi bi-download"></i> Exporter en CSV
+        </a>
+    </div>
+</div>
+{% endblock %}
