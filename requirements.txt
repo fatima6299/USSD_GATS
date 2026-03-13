@@ -2,3 +2,4 @@ flask
 sqlalchemy
 flask-wtf
 bootstrap-flask
+gunicorn

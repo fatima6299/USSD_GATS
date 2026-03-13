@@ -18,7 +18,7 @@ def commandes():
     return render_template('commandes.html', commandes=commandes)
 
 # Initialiser les données du menu
-@app.before_first_request
+
 def init_menu():
     session = Session()
     # Vérifier si la table est vide
@@ -199,7 +199,7 @@ def supprimer_plat():
     return jsonify({'success': False})
 
 # Initialiser les données du menu
-@app.before_first_request
+
 def init_menu():
     session = Session()
     # Vérifier si la table est vide
@@ -220,5 +220,23 @@ def init_menu():
         session.commit()
     session.close()
 
+def init_menu():
+    session = Session()
+    if session.query(Menu).count() == 0:
+        default_menu = {
+            "monday": ["Thiebou", "Mafé"],
+            "tuesday": ["Vermicelle", "Mbakhal"],
+            "wednesday": ["Domoda", "Soupe kandia"],
+            "thursday": ["Yassa poulet", "Thiebou guinar"],
+            "friday": ["Poisson braisé", "Lakh"]
+        }
+        for jour, plats in default_menu.items():
+            for plat in plats:
+                new_menu = Menu(jour=jour, plat=plat)
+                session.add(new_menu)
+        session.commit()
+    session.close()
+
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    init_menu()
+    app.run(debug=False, host='0.0.0.0', port=5000)

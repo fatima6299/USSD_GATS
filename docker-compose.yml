@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  ussd-gats:
+    build: .
+    container_name: ussd_gats
+    ports:
+      - "5000:5000"
+    volumes:
+      - sqlite_data:/app/data
+    environment:
+      - FLASK_ENV=production
+      - FLASK_APP=app.py
+    restart: unless-stopped
+
+volumes:
+  sqlite_data:
+    driver: local

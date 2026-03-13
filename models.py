@@ -1,3 +1,4 @@
+import os
 from sqlalchemy import Column, Integer, String, DateTime, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -25,7 +26,8 @@ class Commande(Base):
     statut = Column(String, default='active')  # 'active' ou 'annulee'
     date_commande = Column(DateTime, default=datetime.utcnow)
 
-engine = create_engine('sqlite:///commandes.db', connect_args={'check_same_thread': False})
+DB_PATH = os.environ.get('DB_PATH', '/app/data/commandes.db')
+engine = create_engine(f'sqlite:///{DB_PATH}', connect_args={'check_same_thread': False})
 Session = sessionmaker(bind=engine)
 
 # Créer la base de données si elle n'existe pas
